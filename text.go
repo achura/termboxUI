@@ -43,14 +43,14 @@ func DrawVerticalLine(x, y, h int, fg, bg termbox.Attribute) {
 // Like FillArea, but it also draws a border around the area using the 'fg' attribute as the color.
 func DrawRectangle(x, y, h, w int, fg, bg termbox.Attribute) {
 	FillArea(x, y, w, h, fg, bg)
-	DrawHorizontalLine(x, y, w, fg, bg)   // top
-	DrawHorizontalLine(x, h+y, w, fg, bg) // bottom
-	DrawVerticalLine(x, y, h, fg, bg)     // left
-	DrawVerticalLine(w, y, h, fg, bg)     // right
-	termbox.SetCell(x, y, '┌', fg, bg)    // top-left corner
-	termbox.SetCell(w, y, '┐', fg, bg)    // top-right corner
-	termbox.SetCell(x, h+y, '└', fg, bg)  // bottom-left corner
-	termbox.SetCell(w, h+y, '┘', fg, bg)  // bottom-right corner
+	DrawHorizontalLine(x, y, w, fg, bg)    // top
+	DrawHorizontalLine(x, h+y, w, fg, bg)  // bottom
+	DrawVerticalLine(x, y, h, fg, bg)      // left
+	DrawVerticalLine(x+w, y, h, fg, bg)    // right
+	termbox.SetCell(x, y, '┌', fg, bg)     // top-left corner
+	termbox.SetCell(x+w, y, '┐', fg, bg)   // top-right corner
+	termbox.SetCell(x, h+y, '└', fg, bg)   // bottom-left corner
+	termbox.SetCell(x+w, h+y, '┘', fg, bg) // bottom-right corner
 }
 
 //======================================================//
