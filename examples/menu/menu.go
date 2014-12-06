@@ -24,68 +24,42 @@ var (
 	bgSetting termbox.Attribute
 
 	activeMenu uint16 = MainMenu
-
-	ui termboxUI.UI
 )
 
 // This example shows a very basic menu field in action.
 // There are three options: change font color, change background color and quit.
 // Help text is supported on the options and either Ctrl+C or Esc will exit.
 func main() {
-	// Initialize the termbox itself.
-	if err := termbox.Init(); err != nil {
+	if err := termboxUI.StartUI(buildUserInterface); err != nil {
 		panic(err)
-	}
-	defer termbox.Close()
-
-	// inputEvent is the channel which will signal results from applying user input to the UI
-	inputEvent := make(chan termboxUI.UIEvent)
-	defer close(inputEvent)
-
-	refresh := true
-
-loop:
-	for {
-		// Refresh after a menu or color change to redraw the UI
-		if refresh {
-			ui = buildUserInterface()
-			refresh = false
-		}
-		ui.Draw()
-
-		select {
-
-		// Handle a result from sending input to a UI field.
-		case event := <-inputEvent:
-			if event.Error != nil {
-				panic(event.Error)
-			}
-			if event.Type == termboxUI.UIResultUint16 {
-				handleMenuResult(event.CustomType, event.Data)
-			}
-			refresh = true
-
-		//Poll for termbox input events on a different channel to prevent blocking the results from a UI interaction
-		case ev := <-pollEvent():
-			switch ev.Type {
-			case termbox.EventKey:
-				switch ev.Key {
-				case termbox.KeyEsc:
-					break loop
-				case termbox.KeyCtrlC:
-					break loop
-				default:
-					ui.HandleInput(ev.Key, ev.Ch, inputEvent)
-				}
-			case termbox.EventResize:
-				refresh = true
-			}
-		}
 	}
 }
 
-func buildUserInterface() termboxUI.UI {
-	var ui termboxUI.UI
+func buildUserInterface() *termboxUI.UI {
+	newUI := new(termboxUI.UI)
+
+	newUI.CustomEvents = make(map[uint16]func(termboxUI.UIEvent))
+	newUI.CustomEvents[MenuChange] = func(event termboxUI.UIEvent) {
+		result := event.Data.Bytes()
+		rdr := bytes.NewReader(result)
+		if err := binary.Read(rdr, binary.LittleEndian, &activeMenu); err != nil {
+			panic(err)
+		}
+	}
+	newUI.CustomEvents[FgColorChange] = func(event termboxUI.UIEvent) {
+		result := event.Data.Bytes()
+		rdr := bytes.NewReader(result)
+		if err := binary.Read(rdr, binary.LittleEndian, &fgSetting); err != nil {
+			panic(err)
+		}
+	}
+	newUI.CustomEvents[BgColorChange] = func(event termboxUI.UIEvent) {
+		result := event.Data.Bytes()
+		rdr := bytes.NewReader(result)
+		if err := binary.Read(rdr, binary.LittleEndian, &bgSetting); err != nil {
+			panic(err)
+		}
+	}
 
 	screenWidth, _ := termbox.Size()
 
@@ -109,53 +83,23 @@ func buildUserInterface() termboxUI.UI {
 	headline += "\n'---'            `----'                            "
 	headlineBox := termboxUI.CreateTextBox(51, 14, false, false, termboxUI.TextAlignmentDefault, termboxUI.TextAlignmentDefault, fgSetting, bgSetting)
 	headlineBox.AddText(headline)
-	ui.AddField(headlineBox, (screenWidth-51)/2, 0, false)
+	newUI.AddField(headlineBox, (screenWidth-51)/2, 0, false)
 
 	// Add the menu to the UI
 	menu := setMenu(10)
-	ui.AddField(menu, 2, 16, true)
+	newUI.AddField(menu, 2, 16, true)
 
 	// Set the fg and bg attributes for all fields in the UI
-	ui.Fg = fgSetting
-	ui.Bg = bgSetting
+	newUI.Fg = fgSetting
+	newUI.Bg = bgSetting
 
-	return ui
-}
-
-func pollEvent() chan termbox.Event {
-	event := make(chan termbox.Event)
-	go func() {
-		event <- termbox.PollEvent()
-	}()
-	return event
+	return newUI
 }
 
 func quit() termboxUI.UIEvent {
 	termbox.Close()
 	os.Exit(0)
 	return termboxUI.UIEvent{}
-}
-
-func handleMenuResult(customType uint16, data *bytes.Buffer) {
-	result := data.Bytes()
-
-	switch customType {
-	case MenuChange:
-		rdr := bytes.NewReader(result)
-		if err := binary.Read(rdr, binary.LittleEndian, &activeMenu); err != nil {
-			panic(err)
-		}
-	case FgColorChange:
-		rdr := bytes.NewReader(result)
-		if err := binary.Read(rdr, binary.LittleEndian, &fgSetting); err != nil {
-			panic(err)
-		}
-	case BgColorChange:
-		rdr := bytes.NewReader(result)
-		if err := binary.Read(rdr, binary.LittleEndian, &bgSetting); err != nil {
-			panic(err)
-		}
-	}
 }
 
 func setMenu(menuHeight int) (menu *termboxUI.Menu) {

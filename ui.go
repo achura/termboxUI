@@ -79,15 +79,18 @@ type Field struct {
 
 // This is the definition of all of the fields in the current termbox GUI.
 type UI struct {
-	Fg     termbox.Attribute
-	Bg     termbox.Attribute
+	Fg           termbox.Attribute
+	Bg           termbox.Attribute
+	Events       map[ResultType]func(UIEvent)
+	CustomEvents map[uint16]func(UIEvent)
+
 	fields []Field
 }
 
 // AddField adds a new ui field to the defined UI
 // The field with draw starting at the specified termbox coordinates
 // hasFocus will give the input handling priority to the new field.
-func (ui *UI) AddField(element DrawHandler, x, y int, hasFocus bool) {
+func (ui *UI) AddField(element DrawHandler, x, y int, hasFocus bool) { //TODO: AddStaticField and AddInteractiveField
 	var newFields = make([]Field, len(ui.fields)+1)
 	var field = Field{x, y, element, hasFocus}
 	copy(newFields[:], ui.fields[:])
@@ -106,6 +109,20 @@ func (ui *UI) Draw() {
 	return
 }
 
+func (ui *UI) PollEvent() chan termbox.Event {
+	event := make(chan termbox.Event)
+	go func() {
+		event <- termbox.PollEvent()
+	}()
+	return event
+}
+
+func (ui *UI) HandleCustomEvent(event UIEvent) {
+	if action, ok := ui.CustomEvents[event.CustomType]; ok {
+		action(event)
+	}
+}
+
 // Send the termbox key and character input to the UI's fields.
 // As soon as the event is consumed by a field, this returns. This way only one field can handle that input at a time.
 func (ui *UI) HandleInput(key termbox.Key, ch rune, event chan UIEvent) (eventConsumed bool) {
@@ -120,4 +137,52 @@ inputLoop:
 	}
 
 	return
+}
+
+func StartUI(buildUserInterface func() *UI, arg ...interface{}) error {
+	if err := termbox.Init(); err != nil {
+		panic(err)
+	}
+	defer termbox.Close()
+
+	ui := new(UI)
+
+	inputEvent := make(chan UIEvent)
+	defer close(inputEvent)
+
+	refresh := true
+
+loop:
+	for {
+		if refresh {
+			ui = buildUserInterface()
+			refresh = false
+		}
+		ui.Draw()
+
+		select {
+		case event := <-inputEvent:
+			if event.Error != nil {
+				return event.Error
+			}
+			ui.HandleCustomEvent(event)
+			refresh = true
+		case ev := <-ui.PollEvent():
+			switch ev.Type {
+			case termbox.EventKey:
+				switch ev.Key {
+				case termbox.KeyEsc:
+					break loop
+				case termbox.KeyCtrlC:
+					break loop
+				default:
+					ui.HandleInput(ev.Key, ev.Ch, inputEvent)
+				}
+			case termbox.EventResize:
+				refresh = true
+			}
+		}
+	}
+
+	return nil
 }
