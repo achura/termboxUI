@@ -139,15 +139,17 @@ inputLoop:
 	return
 }
 
+// This gets the whole ball rolling.
+// The input function is where the ui is defined.
 func StartUI(buildUserInterface func() *UI, arg ...interface{}) error {
 	if err := termbox.Init(); err != nil {
-		panic(err)
+		return err
 	}
 	defer termbox.Close()
 
 	ui := new(UI)
 
-	inputEvent := make(chan UIEvent)
+	inputEvent := make(chan UIEvent, 1)
 	defer close(inputEvent)
 
 	refresh := true

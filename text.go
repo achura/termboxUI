@@ -1,5 +1,7 @@
 package termboxUI
 
+//TODO: text box doesn't parse `\n\n` correctly. All text following these characters is ignored.
+
 import (
 	"bufio"
 	"io"
